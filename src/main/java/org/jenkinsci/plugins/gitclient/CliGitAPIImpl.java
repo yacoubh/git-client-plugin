@@ -574,6 +574,19 @@ public class CliGitAPIImpl extends LegacyCompatibleGitAPIImpl {
 
                 if (reference != null && !reference.isEmpty()) {
                     File referencePath = new File(reference);
+                    //Yacoub hack to get round using environment variables for referencepath
+                    if (!referencePath.exists() && reference.contains(";")){
+                        listener.getLogger().println("REFERENCES LIST:" + reference);
+                        List<String> references = Arrays.asList(reference.split(";"));
+                        for(String ref : references){
+                            referencePath = new File(ref);
+                            if (referencePath.exists()){
+                                reference = ref;
+                                listener.getLogger().println("USING REFERENCE:" + reference);
+                                break;
+                            }
+                        }
+                    }
                     if (!referencePath.exists())
                         listener.error("Reference path does not exist: " + reference);
                     else if (!referencePath.isDirectory())
