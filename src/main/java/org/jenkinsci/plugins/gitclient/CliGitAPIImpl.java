@@ -2012,7 +2012,11 @@ public class CliGitAPIImpl extends LegacyCompatibleGitAPIImpl {
         if (!env.containsKey("GIT_ASKPASS")) {
             freshEnv.put("GIT_ASKPASS", "echo");
         }
+        //Set git vars for extra debug information which might help debug intermittent git problems
+        freshEnv.put("GIT_CURL_VERBOSE", "1");
+        freshEnv.put("GIT_TRACE", "2");
         String command = gitExe + " " + StringUtils.join(args.toCommandArray(), " ");
+        String[] a = args.toCommandArray();
         try {
             args.prepend(gitExe);
             if (CALL_SETSID && launcher.isUnix() && env.containsKey("GIT_SSH") && env.containsKey("DISPLAY")) {
@@ -2024,7 +2028,28 @@ public class CliGitAPIImpl extends LegacyCompatibleGitAPIImpl {
             Launcher.ProcStarter p = launcher.launch().cmds(args.toCommandArray()).
                     envs(freshEnv).stdout(fos).stderr(err);
             if (workDir != null) p.pwd(workDir);
-            int status = p.start().joinWithTimeout(timeout != null ? timeout : TIMEOUT, TimeUnit.MINUTES, listener);
+            int attempt = 1;
+            int max_retrys = 3;
+            int status = 1;
+            int retry_interval=5000;
+
+            //determine if the command is git fetching
+            boolean isFetching = false;
+            for (String s : args.toCommandArray()){
+                if (s.equalsIgnoreCase("fetch")){
+                    isFetching = true;
+                }
+            }
+            //start process and retry
+            while (attempt < max_retrys){
+                status = p.start().joinWithTimeout(timeout != null ? timeout : TIMEOUT, TimeUnit.MINUTES, listener);
+                if (status == 0 || ! isFetching){
+                    break;
+                }
+                attempt+=1;
+                Thread.sleep(retry_interval);
+                listener.getLogger().println(" > Attempt -> " + attempt);
+            }
 
             String result = fos.toString(Charset.defaultCharset().toString());
             if (status != 0) {
